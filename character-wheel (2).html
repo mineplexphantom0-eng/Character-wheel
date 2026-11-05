@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anime Character Wheels</title>
+<style>
+  :root { --bg:#14122b; --panel:#221f47; --ink:#f6f1ff; --dim:#aaa6d6; --gold:#ff7eb6; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; padding:24px 16px 48px; }
+  main { max-width: 1000px; margin: 0 auto; text-align:center; }
+  .layout { display:grid; grid-template-columns:minmax(0, 640px) 300px; gap:16px; justify-content:center; align-items:start; }
+  .layout .sheet { margin-top:16px; }
+  .saved { background:var(--panel); border-radius:16px; padding:16px; text-align:left; position:sticky; top:16px; }
+  .saved h3 { margin:0 0 10px; font-size:18px; font-weight:normal; }
+  .saved h3 span { color:var(--dim); }
+  .saved ul { list-style:none; margin:0; padding:0; display:grid; gap:6px; max-height:70vh; overflow:auto; }
+  .saved li { display:flex; gap:4px; border-radius:8px; background:#2c2859; }
+  .saved li.on { outline:2px solid var(--gold); }
+  .saved li.empty { background:none; color:var(--dim); font-size:14px; }
+  .saved .pick { flex:1; min-width:0; text-align:left; background:none; padding:8px 10px; display:grid; gap:2px; }
+  .saved .pick span { word-break:break-word; }
+  .saved .pick small { color:var(--dim); font-size:12px; }
+  .saved .rm { background:none; padding:4px 10px; color:var(--dim); font-size:18px; }
+  .saved .rm:hover, .saved .pick:hover { background:#3b3670; }
+  @media (max-width: 980px) { .layout { grid-template-columns:minmax(0, 640px); } .saved { position:static; } }
+  h1 { font-size: clamp(28px, 6vw, 44px); margin: 0 0 6px; }
+  .sub { color:var(--dim); margin:0 0 20px; }
+  .stage { background:var(--panel); border-radius:16px; padding:18px 14px 20px; transition:opacity .25s; }
+  .stage.out { opacity:0; }
+  .step { color:var(--dim); font-size:14px; }
+  h2 { margin:2px 0 10px; font-size:28px; font-weight:normal; }
+  .wrap { position:relative; width:min(86vw, 360px); margin:0 auto; }
+  canvas { width:100%; aspect-ratio:1; display:block; margin-top:14px; }
+  .pin { position:absolute; left:50%; top:0; transform:translateX(-50%); width:0; height:0; z-index:2;
+         border-left:11px solid transparent; border-right:11px solid transparent; border-top:22px solid var(--gold); filter:drop-shadow(0 0 6px #ff7eb6); }
+  .live { font-size:24px; min-height:36px; margin:14px 0 12px; color:var(--dim); }
+  .live.done { color:var(--gold); }
+  .row { flex-wrap:wrap; display:flex; gap:16px; justify-content:center; align-items:center; color:var(--dim); font-size:15px; }
+  button { font: inherit; cursor:pointer; border:0; border-radius:8px; padding:8px 16px; background:#3b3670; color:var(--ink); }
+  button:hover { background:#4d4796; }
+  button:disabled { opacity:.5; cursor:default; }
+  button:focus-visible, input:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+  .big { background:var(--gold); color:#14122b; font-size:20px; padding:11px 34px; font-weight:bold; }
+  .big:hover:not(:disabled) { background:#ff9fca; }
+  .sheet { background:var(--panel); border-radius:16px; padding:16px 20px 20px; margin-top:16px; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:6px 16px; text-align:left; margin:0 0 14px; }
+  dd.stat { display:flex; align-items:center; gap:12px; }
+  dd.stat b { font-weight:normal; min-width:2.2em; }
+  .track { flex:1; max-width:220px; height:8px; border-radius:4px; background:#3b3670; overflow:hidden; }
+  .track i { display:block; height:100%; background:var(--gold); }
+  .num { font-size:13px; color:var(--dim); word-break:break-all; margin:0 0 14px; text-align:left; }
+  .num b { color:var(--gold); font-weight:normal; }
+  .names { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:6px 0 12px; }
+  .names .wrap { width:100%; }
+  .names .pin { border-left-width:8px; border-right-width:8px; border-top-width:16px; }
+  .names .live { font-size:16px; min-height:44px; margin:8px 0 0; word-break:break-word; }
+  .names .cap { color:var(--dim); font-size:14px; }
+  @media (max-width: 560px) { .names { grid-template-columns:1fr; justify-items:center; } .names > div { width:min(72vw, 240px); } }
+  .load { display:flex; gap:8px; margin:0 0 12px; }
+  .load input { flex:1; min-width:0; background:#14122b; color:var(--ink); border:1px solid #3b3670; border-radius:8px; padding:8px 10px; font:inherit; }
+  .err { color:#ff9fa0; font-size:14px; margin:-4px 0 12px; text-align:left; }
+  .dec { font-size:11px; color:var(--dim); opacity:.85; word-break:break-all; margin:10px 0 0; text-align:left; }
+  .tip { position:fixed; z-index:10; width:380px; max-width:calc(100vw - 16px); background:#1a1838; border:1px solid #3b3670; border-radius:12px; padding:12px 14px 14px; pointer-events:none; box-shadow:0 8px 28px rgba(0,0,0,.5); text-align:left; }
+  .tip h4 { margin:0 0 8px; font-size:15px; font-weight:normal; word-break:break-word; }
+  .tip .g { display:grid; grid-template-columns:1fr 1fr; gap:6px 16px; }
+  .tip .st { display:grid; grid-template-columns:1fr auto; font-size:12px; color:var(--dim); }
+  .tip .st b { color:var(--ink); font-weight:normal; }
+  .tip .st i { grid-column:1 / -1; display:block; height:5px; margin-top:3px; border-radius:3px; background:linear-gradient(var(--gold), var(--gold)) 0 0 / var(--v) 100% no-repeat, #3b3670; }
+  @media (max-width: 420px) { .tip .g { grid-template-columns:1fr; } }
+  .saved .lbl { color:var(--dim); font-size:13px; margin:14px 0 6px; }
+  .saved textarea { width:100%; resize:none; background:#14122b; color:var(--dim); border:1px solid #3b3670; border-radius:8px; padding:6px 8px; font:11px/1.35 ui-monospace, Consolas, monospace; word-break:break-all; margin-bottom:8px; }
+  .saved .load { margin:0; }
+  .saved .msg { font-size:13px; color:var(--dim); margin:8px 0 0; }
+  .saved .msg.bad { color:#ff9fa0; }
+  dt { color:var(--dim); } dd { margin:0; } dd.set { color:var(--gold); }
+  .sheet .row { gap:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Anime Character Wheels</h1>
+  <p class="sub">One wheel at a time. A Yes on a yes/no wheel unlocks a follow-up wheel, and there are twenty stats from 0 to 100 at the end.<br><span id="total"></span></p>
+
+  <div class="layout"><div class="col">
+  <section class="stage" id="stage">
+    <div class="step" id="step"></div>
+    <h2 id="wname"></h2>
+    <div class="wrap" id="mainWrap"><div class="pin"></div><canvas id="cv"></canvas></div>
+    <div class="live" id="live"></div>
+    <div class="names" id="names" hidden></div>
+    <div class="row"><button class="big" id="spin">Spin</button><button id="spinAll" title="Roll every remaining wheel instantly">Spin all</button><label><input type="checkbox" id="auto"> Auto-spin</label></div>
+  </section>
+
+  <section class="sheet">
+    <dl id="rows"></dl>
+    <p class="num" id="charNum" hidden></p>
+    <div class="load"><input id="numIn" inputmode="numeric" autocomplete="off" placeholder="Paste a character code or number" aria-label="Character code or number"><button id="load">Show character</button></div>
+    <p class="err" id="numErr" hidden></p>
+    <div class="row"><button id="copy">Copy character</button><button id="save" disabled>Save</button><button id="again" hidden>New character</button></div>
+    <p class="dec" id="decNum" hidden></p>
+  </section>
+  </div>
+  <aside class="saved" aria-label="Saved characters">
+    <h3>Saved characters <span id="savedCount"></span></h3>
+    <ul id="savedList"></ul>
+    <div class="listid" id="listId" hidden>
+      <div class="lbl">List code</div>
+      <textarea id="listCode" readonly rows="3" aria-label="List code"></textarea>
+      <button id="copyList">Copy list code</button>
+    </div>
+    <div class="listload">
+      <div class="lbl">Load a saved list</div>
+      <div class="load"><input id="listIn" autocomplete="off" placeholder="Paste a list code" aria-label="List code to load"><button id="loadList">Load</button></div>
+      <p class="msg" id="listMsg" hidden></p>
+    </div>
+  </aside>
+  </div>
+</main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+// fixed seed: the slice order must be identical on every page load, or saved character codes would stop matching
+let seed = 20240607;
+const rnd = () => { seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const sh = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const X = (A, B, f) => sh(A.flatMap(a => B.map(b => f(a, b))));
+const cap = s => s[0].toUpperCase() + s.slice(1);
+
+const YN = [["Do they have a mascot companion?","Companion"],["Do they have a special power?","Power"],["Are they a villain?","Villain"],["Are they the chosen one?","Chosen one"],["Can they fly?","Flying"],["Are they cursed or sealed?","Cursed"],["Can they transform?","Transform"]]
+  .map(([q, l], i) => ({ name: l, label: l, q, hue: i * 36, o: ["Yes","No"] }));
+const ST = ["Strength","Smartness","Speed","Spirit Energy","Charisma","Willpower","Luck","Stealth","Endurance","Defense","Accuracy","Reflexes","Magic Power","Wisdom","Courage","Leadership","Intuition","Focus","Battle IQ","Teamwork"]
+  .map((l, i) => ({ name: l, label: l, q: `${l} (0 to 100)`, stat: true, hue: 300 + i * 23, o: Array.from({ length: 101 }, (_, v) => String(v)) }));
+const NAMES = {"jp":{"first":["Haruto","Sora","Akira","Yuki","Hana","Kaito","Mio","Riku","Sakura","Ren","Yuna","Takumi","Aoi","Hinata","Daiki","Mei","Shota","Nao","Rina","Kenji","Emi","Souta","Yui","Ryota","Miku","Hayato","Saki","Tsubasa","Nanami","Yuto","Haruka","Kouki","Misaki","Tatsuya","Ayumi","Daichi","Koharu","Naoki","Shiori","Ibuki","Kazuma","Minato","Chihiro","Asuka","Rei","Itsuki","Tomoya","Airi","Hiroshi","Noa"],"middle":["Kazuki","Aoi","Hikaru","Natsu","Shin","Mai","Tomo","Eiji","Rin","Ayame","Haru","Kou","Yuu","Sei","Ryuu","Mitsu","Nori","Hide","Masa","Take","Kiyo","Yoshi","Fumi","Chika","Toshi","Satsuki","Kaede","Tsubaki","Ume","Momo","Suzu","Kiku","Nagi","Mizuki","Asahi","Hotaru","Yayoi","Shizuka","Ichiro","Jiro","Saburo","Kenta","Daisuke","Teru","Mana","Nene","Fuyu","Aki","Hoshi","Ran"],"last":["Tanaka","Mori","Kuroda","Hoshino","Aizawa","Nakamura","Takeda","Shirogane","Ishida","Yamazaki","Sato","Suzuki","Takahashi","Watanabe","Ito","Yamamoto","Kobayashi","Kato","Yoshida","Yamada","Sasaki","Matsumoto","Inoue","Kimura","Hayashi","Shimizu","Saito","Ikeda","Hashimoto","Abe","Ishikawa","Ogawa","Goto","Okada","Hasegawa","Fujita","Maeda","Endo","Aoki","Sakamoto","Murakami","Ota","Kondo","Nishimura","Fukuda","Harada","Miyazaki","Tsukino","Amano","Kurosawa"]},"myth":{"first":["Kagami","Reiko","Kuro","Shiro","Akane","Ryu","Nozomi","Tsukasa","Kasumi","Raiden","Tamamo","Yoko","Gintaro","Rokuro","Hyakki","Sakuya","Kaguya","Setsuna","Shuten","Ibaraki","Kiyomi","Mikazuki","Rurika","Hakuro","Genbu","Seiryu","Suzaku","Rai","Fuujin","Raijin","Yuzuki","Tomoe","Hotaru","Shion","Aya","Mizuchi","Orochi","Nue","Kirin","Houou","Kagutsuchi","Ameno","Inari","Uzume","Wakahiko","Tsukuyomi","Amaterasu","Susanoo","Izanami","Benten"],"middle":["Hoshi","Yami","Kaze","Tsuki","Hi","Mizu","Kiri","Onibi","Kage","Sora","Yuki","Kori","Ame","Kumo","Kaminari","Hana","Tori","Kitsu","Rei","Yoru","Asa","Hikari","Tsuchi","Ishi","Kane","Take","Matsu","Sakura","Ume","Fuji","Kawa","Umi","Shima","Yama","Mori","Tani","Nami","Kiba","Tsume","Hane","Uroko","Kagari","Homura","Akari","Sumi","Shiro","Kuro","Aka","Ao","Midori"],"last":["Kurogane","Shirakawa","Tsukikage","Hoshikawa","Yamigiri","Kitsuragi","Oniyama","Kazehara","Tamamoto","Yoruno","Akagawa","Aokage","Kiritani","Hinokawa","Mizunoe","Kagehara","Tsukiyama","Yukimura","Kuronuma","Shiratori","Ookami","Kitsunezuka","Nekomata","Tengumori","Yamanaka","Kawakami","Hoshizora","Yozora","Tsukishiro","Akatsuka","Kurokawa","Shinonome","Asagiri","Fujiwara","Minamoto","Taira","Tachibana","Sugawara","Abeno","Kamo","Kiyohara","Ootori","Ryuuguu","Nagumo","Yatagarasu","Raikou","Sakakibara","Himuro","Shirayuki","Hanazono"]},"elf":{"first":["Elarion","Sylwen","Thalindra","Faelar","Ilyana","Caelum","Nymeria","Aerwyn","Lorien","Seraphel","Aelael","Faeeria","Faearion","Aelindra","Sylindra","Sellar","Thaleria","Callar","Ilywyn","Faewyn","Aerien","Sylyana","Selarion","Thalarion","Oriael","Aellar","Selien","Aelwyn","Serwen","Aerlar","Oriindra","Calarion","Calien","Virlar","Sylarion","Ilyeria","Ilyarion","Thalwen","Lorwyn","Aelarion","Mirien","Sylwyn","Sylael","Nymindra","Faewen","Taryana","Ilylum","Ellum","Calwen","Tarindra"],"middle":["Aelis","Vael","Ithil","Maelis","Orwen","Lunara","Eryndor","Naeris","Thilas","Quenya","Ithlor","Thindor","Silris","Thalor","Lunlor","Thilor","Ithwen","Caellas","Maendor","Thiwen","Galnya","Elilis","Maethil","Feyndor","Aramir","Rialas","Aelas","Lunris","Gallis","Maemir","Isawen","Arathil","Ithmir","Vaeris","Lunlas","Maelas","Lunwen","Lunndor","Lunmir","Naeeth","Riaeth","Ithlis","Naelas","Olieth","Feyeth","Vaeeth","Caelris","Galndor","Caellor","Caelthil"],"last":["Moonwhisper","Starfall","Dawnbringer","Silverleaf","Skyrunner","Brightwater","Stormwing","Dreamweaver","Goldenvale","Evergreen","Starglen","Silverrunner","Everfall","Skysong","Brightwhisper","Goldenfall","Frostborn","Frostweaver","Starweaver","Sunborn","Everwater","Skywing","Leafwhisper","Oakweaver","Crystalshade","Eversong","Nightfall","Nightweaver","Crystalwing","Crystalvale","Dreamfall","Silverglen","Riverwing","Frostwhisper","Dreamwater","Skyvale","Silvershade","Skyweaver","Windvale","Riverbloom","Brightleaf","Mistweaver","Goldengreen","Goldenshade","Fireshade","Goldenrunner","Starwhisper","Windweaver","Riverfall","Goldenbloom"]},"gothic":{"first":["Lucien","Seraphine","Morgana","Dorian","Selene","Valen","Aurelia","Cassius","Isolde","Lilith","Damien","Vivienne","Alaric","Octavia","Sebastian","Evelyn","Viktor","Rosalind","Lazarus","Mortimer","Cordelia","Gideon","Ophelia","Thaddeus","Genevieve","Mathias","Delphine","Cyrus","Persephone","Balthazar","Adelaide","Roderick","Nerissa","Leopold","Anastasia","Dominic","Esmeralda","Florian","Ignatius","Lenore","Maximilian","Nikolai","Odette","Phineas","Raven","Sylvain","Tobias","Ulrich","Vesna","Wilhelm"],"middle":["Noctis","Augustine","Vesper","Corvus","Ambrose","Celeste","Lucius","Noir","Raphael","Evangeline","Umbra","Aurelian","Sanguis","Mortis","Lux","Nyx","Orion","Sable","Tenebris","Argent","Pallor","Requiem","Elegy","Solace","Dirge","Crimson","Onyx","Midnight","Ember","Twilight","Obsidian","Ivory","Scarlet","Cathal","Gabriel","Michael","Uriel","Azrael","Zadkiel","Remiel","Jophiel","Chamuel","Haniel","Cassiel","Sariel","Raguel","Camael","Zaphkiel","Aurora","Lilac"],"last":["Von Crimson","Blackthorne","Ravenscroft","Nightshade","Duskwood","Silvermoon","Vanterel","Aldenhart","Ashford","De Sanguine","Blackwood","Grimwald","Thornwick","Ravenholt","Crowley","Draven","Morrigan","Mournsworth","Hollowell","Graymoor","Ashgrave","Dreadmoor","Bloodworth","Wraithmere","Duskmantle","Velvetine","Nocturne","Stormvale","Ebonmere","Silverthorn","Whitlock","Carrion","Lichfield","Vesperhall","Darkholme","Ironwood","Winterbourne","Greywood","Starcrest","Moonshade","Valmont","Montclair","Beaumont","Delacroix","Le Fay","Rosenthal","Von Helsing","Ravenwood","Nighthollow","Marrowgate"]},"machine":{"first":["Axiom","Cipher","Nova","Vector","Echo","Zero","Quark","Helix","Pixel","Ion","Matrix","Cortex","Binary","Neon","Orbit","Pulse","Vertex","Photon","Proton","Tensor","Kernel","Syntax","Daemon","Glitch","Byte","Codex","Nexus","Flux","Cobalt","Titan","Atlas","Sentinel","Lambda","Epsilon","Theta","Aegis","Beacon","Circuit","Enigma","Fractal","Gizmo","Halo","Iris","Jolt","Krypton","Lumen","Nimbus","Onyx","Plasma","Quasar"],"middle":["Alpha","Beta","Gamma","Delta","Sigma","Omega","Prime","Mark-II","Zeta","Kappa","Epsilon","Theta","Lambda","Rho","Tau","Phi","Psi","Chi","Eta","Iota","Mu","Nu","Xi","Omicron","Pi","Upsilon","Mark-I","Mark-III","Mark-IV","Mark-V","Mark-VI","Mark-VII","Type-0","Type-1","Type-2","Type-3","Ver-2","Ver-3","Ver-4","Ver-5","Rev-A","Rev-B","Rev-C","Neo","Ultra","Hyper","Mega","Proto","Zero","Max"],"last":["SN-6305-EN","SN-1791-CT","SN-2542-MU","SN-1950-SG","SN-1614-CP","SN-7851-CH","SN-2486-TP","SN-1968-UD","SN-4657-WW","SN-2013-UU","SN-7499-BH","SN-1763-TE","SN-5744-PE","SN-9858-DU","SN-6054-TX","SN-3961-DU","SN-4078-MD","SN-9974-YC","SN-1976-VG","SN-9133-XT","SN-8005-LQ","SN-8424-MK","SN-5070-FY","SN-4999-CU","SN-5919-SR","SN-6627-ZQ","SN-5717-VC","SN-2934-SP","SN-3702-LE","SN-9011-PB","SN-2271-TU","SN-6140-LY","SN-6737-VR","SN-8474-CC","SN-5422-RY","SN-2064-BZ","SN-6072-WU","SN-8301-KY","SN-7320-XM","SN-1369-QM","SN-3753-VD","SN-9088-BG","SN-5709-EZ","SN-5056-NN","SN-9134-CF","SN-8359-NT","SN-5552-EP","SN-5561-YP","SN-6878-XN","SN-4780-EC"]},"spirit":{"first":["Mochi","Puddle","Wisp","Pudding","Bubbles","Mist","Glimmer","Sprout","Ember","Pebble","Dango","Mikan","Tofu","Pip","Moss","Dewdrop","Cinder","Clover","Fluff","Bean","Pickle","Biscuit","Marshmallow","Noodle","Pancake","Sprinkle","Twinkle","Button","Peach","Acorn","Honey","Maple","Pudge","Tadpole","Cricket","Firefly","Snowdrop","Poppy","Thistle","Willow","Fern","Ripple","Breezy","Dandelion","Gumdrop","Jellybean","Kiwi","Lemon","Mango","Nutmeg"],"middle":["the Brave","the Wobbly","the Kind","the Sleepy","the Great","the Tiny","the Bright","the Gentle","the Hungry","the Lucky","the Bold","the Curious","the Quiet","the Loud","the Swift","the Clever","the Shy","the Merry","the Wise","the Fierce","the Calm","the Silly","the Proud","the Humble","the Dreamy","the Fluffy","the Grumpy","the Cheerful","the Forgotten","the Eternal","the Lost","the Ancient","the Young","the Gleaming","the Soft","the Sparkly","the Round","the Mighty","the Peaceful","the Daring","the Watchful","the Playful","the Tireless","the Glowing","the Patient","the Nimble","the Radiant","the Cozy","the Restless","the Jolly"],"last":["of the Lake","of the Forest","of the Hearth","of the Old Shrine","of the Mist","of the Hills","of the Stream","of the Moon","of the Breeze","of the Meadow","of the Dunes","of the Reef","of the Hot Spring","of the Starlight","of the Silent Woods","of the Old Well","of the Quiet Pond","of the Autumn Leaves","of the Stone Bridge","of the Waterfall","of the Fog","of the Flower Field","of the Crescent Bay","of the Hollow Tree","of the Bamboo Grove","of the Harbor","of the Cherry Tree","of the Cave","of the Mountain Pass","of the Garden","of the River","of the Tea House","of the Snow","of the Fireflies","of the Rain","of the Windmill","of the Valley","of the Lantern Festival","of the Bell Tower","of the Lighthouse","of the Crossroads","of the Pond","of the Rice Field","of the Sunrise","of the Clouds","of the Orchard","of the Old Temple","of the Marsh","of the Sunset","of the Morning Dew"]}};
+const CULT = { "Human":"jp","Cat-person":"jp","Beastkin":"jp","Half-demon":"jp","Kitsune":"myth","Oni":"myth","Yokai":"myth","Grim reaper":"myth","Elf":"elf","Fairy":"elf","Merfolk":"elf","Dragon-kin":"elf","Vampire":"gothic","Angel":"gothic","Android":"machine","Cyborg":"machine","Homunculus":"machine","Golem":"machine","Spirit":"spirit","Slime":"spirit" };
+const MAIN = [
+  { name:"Origin", hue:340, o: X(["Human","Half-demon","Oni","Kitsune","Elf","Vampire","Angel","Android","Spirit","Dragon-kin","Cat-person","Merfolk","Grim reaper","Homunculus","Cyborg","Yokai","Beastkin","Fairy","Golem","Slime"],
+      ["Moon","Flame","Storm","Shadow","Frost","Sea","Sky","Star","Mountain","Blossom"], (a,b) => `${b} ${a}`) },
+  ...["first","middle","last"].map(k => ({ name: k[0].toUpperCase() + k.slice(1) + " name", dyn: k, hue: 330, o: NAMES.jp[k] })),
+  { name:"Role", hue:200, o: X(["Swordsman","Mage","Ninja","Samurai","Idol","Mecha pilot","Demon hunter","Exorcist","Summoner","Assassin","Student council president","Transfer student","Chef","Detective","Bounty hunter","Alchemist","Shrine maiden","Martial artist","Pro gamer","Pirate captain"],
+      ["Wandering","Retired","Disgraced","Rookie","Legendary","Genius","Rogue","Holy","Reluctant","Top-ranked"], (a,b) => `${b} ${a.toLowerCase()}`) }
+];
+const ARM = { name:"Armed?", label:"Armed", q:"Does your character have a weapon?", hue:0, o:["Yes","No"] };
+const WPN = { name:"Weapon", label:"Weapon", q:"Which weapon?", hue:30, o: X(["Katana","Scythe","Spear","Greatsword","Twin blades","Bow","Chain scythe","Gunblade","War fan","Staff","Kunai","Naginata","Giant hammer","Rapier","Whip sword","Magic wand","Trident","Claws","Sealed sword","Shield and sword"],
+      ["Cursed","Legendary","Glowing","Broken","Sealed","Demon","Holy","Rusty","Crystal","Stolen"], (a,b) => `${b} ${a.toLowerCase()}`) };
+const FU = {
+  "Companion": { name:"Companion type", q:"What is the mascot companion?", o: X(["Talking cat","Fox spirit","Mini dragon","Floating robot","Ghost kid","Slime","Giant dog","Fairy","Tanuki","Crow","Living plushie","Panda","Owl familiar","Tiny golem","Phoenix chick","Spirit rabbit","Mechanical bird","Baby kraken","Cat girl","Wolf pup"], ["who loves snacks","only they can see","who talks too much","who is secretly powerful","who is always sleepy","who is very brave","who is terrified of everything","who gives bad advice","who is actually a god","who is evolving"], (a,b) => `${a} ${b}`) },
+  "Power": { name:"Power type", q:"What is their special power?", o: X(["Fire control","Time stop","Shadow stepping","Gravity control","Mind reading","Super speed","Copying powers","Healing","Lightning","Ice","Soul sight","Shapeshifting","Illusions","Super strength","Wind control","Plant control","Dimension doors","Telekinesis","Blood magic","Sound waves"], ["drains their life","only works at night","needs a hand sign","grows with emotion","has a secret weakness","forbidden by the council","inherited from a clan","awakened in battle","needs a chant","sealed at first"], (a,b) => `${a} (${b})`) },
+  "Villain": { name:"Villain type", q:"What kind of villain?", o: X(["Demon king","Cult leader","Corrupt noble","Evil scientist","Rogue hero","Mastermind","Fallen angel","Crime lord","Dark sorcerer","Warlord","Evil clone","Shadow organization boss","Rogue AI","Time traveler","Corrupted god","Vampire lord","Pirate king","Mad emperor","Twisted teacher","Masked schemer"], ["seeking power","seeking revenge","who loves chaos","who wants to rule","who wants to live forever","who thinks they're the hero","driven by grief","hired by someone worse","who wants to burn it all","who just wants respect"], (a,b) => `${a} ${b}`) },
+  "Chosen one": { name:"Prophecy", q:"Why are they the chosen one?", o: X(["Chosen by a sacred sword","Chosen by a dying god","Born under a red moon","Marked by a seal","Foretold in a scroll","Awakened by a meteor","Chosen by a spirit","Last of a clan","Holder of a demon","A reincarnated hero","Child of two worlds","Keeper of the gate","Summoned hero","Bearer of the star","Heir to a lost power","Wielder of a forbidden book","Vessel of a sleeping dragon","Blessed by the moon","Marked by fate","Sworn guardian"], ["and the world is hunting them","but nobody believes it","and they must hide it","but they refuse the role","and a rival wants it","but the power is fading","and a countdown has started","but they don't know yet","and a villain knows","and everyone depends on them"], (a,b) => `${a} ${b}`) },
+  "Flying": { name:"Flight method", q:"How do they fly?", o: X(["Wings of light","Demon wings","Magic broom","Cloud riding","Flight spell","Rocket boots","Winged familiar","Mecha flight pack","Wind aura","Spirit wings","Giant bird","Dragon rider","Floating sword","Anti-gravity","Angel halo","Feathered cloak","Floating umbrella","Hot-air balloon","Gliding cape","Ghostly float"], ["only at night","poorly","very fast","short distances only","afraid of heights","silently","only when happy","very loudly","for ten minutes","only in storms"], (a,b) => `${a} (${b})`) },
+  "Cursed": { name:"Curse", q:"What is the curse or seal?", o: X(["Demon sealed in their arm","Cursed left eye","Burning mark","Sealed memories","Cursed necklace","Hungry blade","Voice of a spirit","Fox spirit bound","Dragon sleeping inside","Cannot use magic","Aging fast","Turning to light","Ghost possession","Seal on their heart","Bad luck aura","Blood curse","Moon curse","Fading existence","Forbidden contract","Shadow clone curse"], ["acts up when angry","acts up at night","acts up at full moon","acts up when they cry","acts up near danger","acts up when they lie","acts up at sunrise","acts up when hungry","acts up when they fight","acts up when they smile"], (a,b) => `${a} (${b})`) },
+  "Transform": { name:"Transformation", q:"What is their transformation?", o: X(["Final form","Beast mode","Armor form","Angel form","Demon form","Giant form","Chibi form","Mecha suit","Magical outfit","Dragon form","Shadow form","Golden aura","Spirit form","Ice form","Fire form","Wolf form","Light form","Dual form","Gear shift","Kaiju form"], ["when they shout a catchphrase","when protecting a friend","when badly hurt","with a dramatic pose","at midnight","when they are happy","when they cry","after eating","at full moon","only once a day"], (a,b) => `${a} ${b}`) }
+};
+const W = [...MAIN];
+const addPair = (y, f) => { W.push(y); f.req = W.length - 1; f.label = f.label || f.name; W.push(f); };
+addPair(ARM, WPN);
+YN.forEach(y => addPair(y, { ...FU[y.label], hue: y.hue + 18 }));
+W.push(...ST);
+const cultureOf = o => CULT[Object.keys(CULT).find(r => o.endsWith(r))];
+function opts(i) {
+  const w = W[i]; if (!w.dyn) return;
+  const c = cultureOf(W[0].o[res[0]]);
+  w.o = NAMES[c][w.dyn];
+  if (w.dyn === "last") w.name = w.label = c === "machine" ? "Serial number" : "Last name";
+}
+const SIZE = 360, dpr = window.devicePixelRatio || 1;
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = id => document.getElementById(id);
+const cv = $("cv"), ctx = cv.getContext("2d");
+cv.width = cv.height = SIZE * dpr;
+
+const skipped = i => W[i].req !== undefined && res[W[i].req] % 2 === 1;
+let cur = 0, res = [], busy = false, angle = 0;
+
+function pickIndex(a, n) {
+  const S = Math.PI * 2 / n, x = ((-Math.PI / 2 - a) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+  return Math.floor(x / S) % n;
+}
+
+const SM = 200, gctx = [], liveEls = [], capEls = [], gang = [0, 0, 0];
+const NAMEIDX = W.map((w, i) => w.dyn ? i : -1).filter(i => i >= 0);
+W[NAMEIDX[0]].group = NAMEIDX;
+NAMEIDX.slice(1).forEach(i => W[i].follower = true);
+NAMEIDX.forEach(i => {
+  const d = document.createElement("div");
+  d.innerHTML = `<div class="cap">${W[i].name}</div><div class="wrap"><div class="pin"></div><canvas></canvas></div><div class="live"></div>`;
+  $("names").appendChild(d);
+  const c = d.querySelector("canvas"); c.width = c.height = SM * dpr;
+  gctx.push(c.getContext("2d")); liveEls.push(d.querySelector(".live")); capEls.push(d.querySelector(".cap"));
+});
+
+function draw(c, w, a, size) {
+  const n = w.o.length, S = Math.PI * 2 / n, r = size / 2, big = size >= 300, hub = big ? 14 : 9;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, size, size);
+  for (let k = 0; k < n; k++) {
+    const s = a + k * S;
+    c.beginPath(); c.moveTo(r, r); c.arc(r, r, r - 4, s, s + S); c.closePath();
+    c.fillStyle = `hsl(${w.hue + (k * 7) % 40}, ${k % 2 ? 48 : 58}%, ${k % 2 ? 32 : 44}%)`; c.fill();
+    if (n <= 12) {
+      c.strokeStyle = "#14122b"; c.lineWidth = 2; c.stroke();
+      c.save(); c.translate(r, r); c.rotate(s + S / 2);
+      const base = big ? (n <= 6 ? 22 : 15) : 12, off = big ? 24 : 10, maxW = r - off - hub - 6;
+      c.fillStyle = "#fff"; c.font = `${base}px Trebuchet MS, sans-serif`;
+      const tw = c.measureText(w.o[k]).width;
+      if (tw > maxW) c.font = `${(base * maxW / tw).toFixed(1)}px Trebuchet MS, sans-serif`;
+      c.textAlign = "right"; c.textBaseline = "middle"; c.fillText(w.o[k], r - off, 0); c.restore();
+    }
+  }
+  c.beginPath(); c.arc(r, r, hub, 0, 7); c.fillStyle = "#14122b"; c.fill();
+}
+
+function rows() {
+  $("rows").innerHTML = W.map((w, i) => {
+    const v = res[i];
+    if (w.follower) return "";
+    if (w.req !== undefined && !(res[w.req] !== undefined && res[w.req] % 2 === 0)) return "";
+    if (w.group) {
+      const done = w.group.every(j => res[j] !== undefined);
+      return `<dt>Name</dt><dd class="${done ? "set" : ""}">${done ? w.group.map(j => W[j].o[res[j]]).join(" ") : "–"}</dd>`;
+    }
+    if (w.stat) return `<dt>${w.label}</dt>` + (v === undefined ? `<dd>–</dd>` : `<dd class="set stat"><b>${v}</b><span class="track"><i style="width:${v}%"></i></span></dd>`);
+    const txt = v === undefined ? "–" : v === -1 ? "Unarmed" : cap(w.o[v]);
+    return `<dt>${w.label || w.name}</dt><dd class="${v === undefined ? "" : "set"}">${txt}</dd>`;
+  }).join("");
+}
+
+function show() {
+  const idxs = W[cur].group || [cur], isG = !!W[cur].group;
+  idxs.forEach(i => opts(i));
+  $("mainWrap").hidden = isG; $("live").hidden = isG; $("names").hidden = !isG;
+  const live = (_, i) => !skipped(i) && !W[i].follower;
+  $("step").textContent = `Wheel ${W.slice(0, cur + 1).filter(live).length} of ${W.filter(live).length}`;
+  $("wname").textContent = isG ? "Name" : (W[cur].q || W[cur].name);
+  if (isG) {
+    idxs.forEach((wi, j) => {
+      gang[j] = Math.random() * 6.28; draw(gctx[j], W[wi], gang[j], SM);
+      capEls[j].textContent = W[wi].name;
+      liveEls[j].textContent = `${W[wi].o.length} options`; liveEls[j].classList.remove("done");
+    });
+  } else {
+    angle = Math.random() * 6.28;
+    $("live").textContent = `${W[cur].o.length} options`; $("live").classList.remove("done");
+    draw(ctx, W[cur], angle, SIZE);
+  }
+  $("spin").disabled = false; $("spinAll").disabled = false;
+}
+
+function spin() {
+  if (busy) return; busy = true; $("spin").disabled = true; $("spinAll").disabled = true;
+  const idxs = W[cur].group || [cur], isG = !!W[cur].group;
+  Promise.all(idxs.map((i, j) => new Promise(done => {
+    const w = W[i], n = w.o.length, start = isG ? gang[j] : angle;
+    const total = Math.PI * 2 * (5 + Math.random() * 3) + Math.random() * 6.28;
+    const dur = reduced ? 600 : 4200 + Math.random() * 800, t0 = performance.now(); let last = -1;
+    const liveEl = isG ? liveEls[j] : $("live");
+    (function frame(t) {
+      const p = Math.min((t - t0) / dur, 1), e = 1 - Math.pow(1 - p, 3), a = start + total * e;
+      if (isG) { gang[j] = a; draw(gctx[j], w, a, SM); } else { angle = a; draw(ctx, w, a, SIZE); }
+      const idx = pickIndex(a, n);
+      if (idx !== last) { liveEl.textContent = cap(w.o[idx]); last = idx; }
+      if (p < 1) return requestAnimationFrame(frame);
+      res[i] = idx; liveEl.classList.add("done"); done();
+    })(t0);
+  }))).then(() => { rows(); setTimeout(next, 1700); });
+}
+
+function next() {
+  busy = false;
+  let n = cur + (W[cur].group ? W[cur].group.length : 1);
+  while (n < W.length && skipped(n)) { res[n] = -1; n++; }
+  rows();
+  if (n >= W.length) { finish(); return; }
+  $("stage").classList.add("out");
+  setTimeout(() => {
+    cur = n; show(); $("stage").classList.remove("out");
+    if ($("auto").checked) setTimeout(spin, 700);
+  }, 260);
+}
+
+const PARENTS = new Set(W.filter(w => w.req !== undefined).map(w => w.req));
+const group = n => n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const sci = n => { const t = n.toString(); return `${t[0]}.${t.slice(1, 3)} × 10<sup>${t.length - 1}</sup>`; };
+// each yes/no wheel and its follow-up count as one choice: "no", or "yes" plus one of the follow-up options
+const TOTAL = W.reduce((t, w, i) => PARENTS.has(i) ? t : t * BigInt(w.o.length + (w.req !== undefined ? 1 : 0)), 1n);
+$("total").innerHTML = `About ${sci(TOTAL)} possible characters.`;
+const ALPHA = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"; // no 0, O, I or l, so codes are hard to misread
+const toCode = n => { let t = ""; while (n > 0n) { t = ALPHA[Number(n % 58n)] + t; n /= 58n; } return t; };
+const CODELEN = toCode(TOTAL - 1n).length;
+const fmtCode = n => toCode(n).padStart(CODELEN, ALPHA[0]).replace(/(.{5})(?=.)/g, "$1-");
+function finish() {
+  curId = null; // set below once the number is known
+  let id = 0n;
+  W.forEach((w, i) => {
+    if (PARENTS.has(i)) return;
+    const n = BigInt(w.o.length), v = res[i];
+    id = w.req !== undefined ? id * (n + 1n) + (v === -1 ? 0n : BigInt(v) + 1n) : id * n + BigInt(v);
+  });
+  $("charNum").innerHTML = `Character code <b>${fmtCode(id)}</b> (one of about ${sci(TOTAL)})`;
+  curId = id; $("save").disabled = false; renderSaved();
+  $("decNum").textContent = `Character number: ${group(id)}`; $("decNum").hidden = false;
+  $("charNum").hidden = false; $("stage").hidden = true; $("again").hidden = false;
+}
+function decode(id) {
+  const r = [];
+  const idxs = W.map((_, i) => i).filter(i => !PARENTS.has(i));
+  for (let k = idxs.length - 1; k >= 0; k--) {
+    const i = idxs[k], w = W[i], n = BigInt(w.o.length + (w.req !== undefined ? 1 : 0));
+    const d = Number(id % n); id /= n;
+    if (w.req !== undefined) { if (d === 0) { r[i] = -1; r[w.req] = 1; } else { r[i] = d - 1; r[w.req] = 0; } }
+    else r[i] = d;
+  }
+  return r;
+}
+function loadNumber() {
+  const err = m => { $("numErr").textContent = m; $("numErr").hidden = !m; };
+  if (busy) return err("Wait for the wheel to finish spinning first.");
+  const raw = $("numIn").value.replace(/[\s#,-]/g, "");
+  if (!raw) return err("Type or paste a character code first.");
+  let id = 0n;
+  if (/^\d+$/.test(raw)) id = BigInt(raw); // a plain number
+  else for (const ch of raw) {
+    const k = ALPHA.indexOf(ch);
+    if (k < 0) return err(`"${ch}" isn't used in character codes. Codes never contain 0, O, I or l.`);
+    id = id * 58n + BigInt(k);
+  }
+  if (id >= TOTAL) return err("That code doesn't match a character. Check that you copied all of it.");
+  err("");
+  showId(id);
+}
+function showId(id) {
+  res = decode(id);
+  W.forEach((_, i) => opts(i));
+  rows(); finish();
+}
+const KEY = "anime-character-wheels-saved-v2";
+let saved = [], curId = null;
+try { saved = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) {}
+const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} };
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function renderSaved() {
+  hideTip();
+  $("listId").hidden = !saved.length;
+  if (saved.length) $("listCode").value = listCode();
+  $("savedCount").textContent = saved.length ? `(${saved.length})` : "";
+  $("savedList").innerHTML = saved.length ? saved.map((c, i) =>
+    `<li class="${curId !== null && c.id === curId.toString() ? "on" : ""}"><button class="pick" data-i="${i}"><span>${esc(c.name)}</span><small>${esc(c.desc)}</small></button><button class="rm" data-i="${i}" aria-label="Remove ${esc(c.name)}">×</button></li>`).join("")
+    : `<li class="empty">Nothing saved yet. Finish a character and press Save.</li>`;
+}
+const ROLE = W.findIndex(w => w.name === "Role");
+function summarize(id) {
+  const r = decode(id), c = cultureOf(W[0].o[r[0]]);
+  return { id: id.toString(), name: NAMEIDX.map(i => NAMES[c][W[i].dyn][r[i]]).join(" "), desc: `${W[0].o[r[0]]}, ${W[ROLE].o[r[ROLE]]}` };
+}
+const chk = t => ALPHA[[...t].reduce((n, ch) => n + ALPHA.indexOf(ch), 0) % 58];
+function listCode() {
+  const t = saved.map(c => toCode(BigInt(c.id)).padStart(CODELEN, ALPHA[0])).join("");
+  return (t + chk(t)).replace(/(.{5})(?=.)/g, "$1-");
+}
+function hideTip() { $("tip").hidden = true; }
+function showTip(li) {
+  const c = saved[+li.querySelector(".pick").dataset.i], r = decode(BigInt(c.id)), tip = $("tip");
+  tip.innerHTML = `<h4>${esc(c.name)}</h4><div class="g">` + W.map((w, i) => w.stat ? `<div class="st"><span>${w.label}</span><b>${r[i]}</b><i style="--v:${r[i]}%"></i></div>` : "").join("") + `</div>`;
+  tip.hidden = false;
+  const b = li.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight, vw = innerWidth, vh = innerHeight;
+  let left = b.left - tw - 10, top = b.top;
+  if (left < 8) { left = Math.min(Math.max(8, b.left), vw - tw - 8); top = b.bottom + 8; if (top + th > vh - 8) top = Math.max(8, b.top - th - 8); }
+  tip.style.left = left + "px"; tip.style.top = Math.max(8, Math.min(top, vh - th - 8)) + "px";
+}
+let tipLi = null;
+$("savedList").onmouseover = e => {
+  const li = e.target.closest("li:not(.empty)");
+  if (li === tipLi) return;
+  tipLi = li; li ? showTip(li) : hideTip();
+};
+$("savedList").onmouseleave = () => { tipLi = null; hideTip(); };
+$("savedList").onfocusin = e => { const li = e.target.closest("li:not(.empty)"); if (li) { tipLi = li; showTip(li); } };
+$("savedList").onfocusout = () => { tipLi = null; hideTip(); };
+$("savedList").onscroll = hideTip;
+$("savedList").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const i = +b.dataset.i;
+  if (b.classList.contains("rm")) { saved.splice(i, 1); persist(); renderSaved(); }
+  else if (!busy) { $("numErr").hidden = true; showId(BigInt(saved[i].id)); }
+};
+$("save").onclick = e => {
+  if (curId === null) return;
+  const btn = e.currentTarget, id = curId.toString(), flash = t => { btn.textContent = t; setTimeout(() => btn.textContent = "Save", 1200); };
+  if (saved.some(c => c.id === id)) return flash("Already saved");
+  saved.unshift(summarize(curId));
+  persist(); renderSaved(); flash("Saved");
+};
+$("listCode").onclick = e => e.target.select();
+$("copyList").onclick = e => {
+  navigator.clipboard?.writeText($("listCode").value).then(() => { e.target.textContent = "Copied"; setTimeout(() => e.target.textContent = "Copy list code", 1200); });
+};
+function loadList() {
+  const msg = (t, bad) => { $("listMsg").textContent = t; $("listMsg").className = "msg" + (bad ? " bad" : ""); $("listMsg").hidden = !t; };
+  const raw = $("listIn").value.replace(/[\s#-]/g, "");
+  if (!raw) return msg("Paste a list code first.", true);
+  const bad = [...raw].find(ch => ALPHA.indexOf(ch) < 0);
+  if (bad) return msg(`"${bad}" isn't used in list codes. Codes never contain 0, O, I or l.`, true);
+  if (raw.length % CODELEN !== 1 || raw.length < CODELEN + 1) return msg("That list code looks incomplete. Check that you copied all of it.", true);
+  const body = raw.slice(0, -1);
+  if (chk(body) !== raw.slice(-1)) return msg("That list code has a typo in it. Check that you copied it exactly.", true);
+  const ids = [];
+  for (let k = 0; k < body.length; k += CODELEN) {
+    let n = 0n; for (const ch of body.slice(k, k + CODELEN)) n = n * 58n + BigInt(ALPHA.indexOf(ch));
+    if (n >= TOTAL) return msg("That list code doesn't match any characters.", true);
+    ids.push(n);
+  }
+  let added = 0;
+  for (const id of ids) if (!saved.some(c => c.id === id.toString())) { saved.push(summarize(id)); added++; }
+  persist(); renderSaved();
+  msg(`Added ${added} character${added === 1 ? "" : "s"}${added < ids.length ? ` (${ids.length - added} already in your list)` : ""}.`);
+  if (added) $("listIn").value = "";
+}
+$("loadList").onclick = loadList;
+$("listIn").onkeydown = e => { if (e.key === "Enter") loadList(); };
+$("load").onclick = loadNumber;
+$("numIn").onkeydown = e => { if (e.key === "Enter") loadNumber(); };
+$("spin").onclick = spin;
+$("spinAll").onclick = () => {
+  if (busy) return;
+  for (let i = 0; i < W.length; i++) {
+    if (res[i] !== undefined) continue;
+    opts(i);
+    res[i] = skipped(i) ? -1 : Math.random() * W[i].o.length | 0;
+  }
+  rows(); finish();
+};
+$("again").onclick = () => { curId = null; $("save").disabled = true; renderSaved(); $("numErr").hidden = true; $("decNum").hidden = true; res = []; cur = 0; $("again").hidden = true; $("charNum").hidden = true; $("stage").hidden = false; rows(); show(); };
+$("copy").onclick = e => {
+  let t = [...$("rows").children].reduce((s, el, i) => s + el.textContent + (i % 2 ? "\n" : ": "), "");
+  if (!$("charNum").hidden) t += $("charNum").textContent;
+  navigator.clipboard?.writeText(t).then(() => { e.target.textContent = "Copied"; setTimeout(() => e.target.textContent = "Copy character", 1200); });
+};
+rows(); show(); renderSaved();
+</script>
+</body>
+</html>
